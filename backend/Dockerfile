@@ -1,4 +1,4 @@
-# Etapa 1: Construcción (Build)
+# --- ETAPA 1: Construcción (Build) ---
 FROM node:20-alpine AS builder
 
 # Habilitar pnpm
@@ -6,34 +6,38 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copiar archivos de dependencias
+# Copiar archivos de dependencias y esquema de base de datos
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma/
 
 # Instalar dependencias
 RUN pnpm install --frozen-lockfile
 
-# Copiar el resto del código
+# Copiar el resto del código fuente del backend
 COPY . .
 
-# Generar cliente de Prisma y compilar TypeScript
+# Generar el cliente de Prisma y compilar TypeScript
 RUN pnpm prisma generate
-RUN pnpm build
+RUN pnpm run build || npx tsc
 
-# Etapa 2: Producción (Run)
+# --- ETAPA 2: Producción (Runner) ---
 FROM node:20-alpine AS runner
-
-RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copiar solo lo necesario desde la etapa de build
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./
+# Habilitar pnpm en la etapa final
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Exponer el puerto de la API
+# Copiar manifiesto e instalar solo dependencias de producción
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod --frozen-lockfile
+
+# Copiar artefactos compilados y motor de Prisma desde la etapa builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
+
 EXPOSE 3000
 
-# Comando para iniciar la aplicación
-CMD ["pnpm", "start"]
+# Ejecución directa optimizada
+CMD ["node", "dist/index.js"]
