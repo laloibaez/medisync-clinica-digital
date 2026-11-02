@@ -23,3 +23,5 @@ yarn-error.log*
 .windsurf/
 .agents/
 backend/data/triajes.json
+.vercel
+.env*
